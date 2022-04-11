@@ -171,3 +171,77 @@
 
 * 叶子结点满了是 **复制并向上推**
 * 索引节点满了是 **不复制向上推**
+
+
+
+# Project Notes
+
+
+
+## Project 2: B+ Tree
+
+### Put
+
+### Iterator
+
+个人觉得迭代器为该实验最为精妙的设计 (醍醐灌顶的感觉)。
+
+通过对细节的再次封装，使得上层在调用迭代器的时候无需考虑下层的各种细节。
+
+在实验中，最上层的根节点需要调用最下层叶子节点的迭代器以访问所有数据。LeafNode提供了 `List<RecordId> rids` 的迭代器，但是这个迭代器只能访问该叶子节点，访问本层所有叶子节点的话需要一些额外的操作技巧 (Trick：通过兄弟节点指针访问右边的一个节点)，而如果把这个操作直接放进**上层**可能最后难以避免屎山的形成。那该怎么办？
+
+最精妙的想法 ：
+
+* 通过封装后提供一个 **更加抽象** 的接口，供上层调用
+* 上层并不需要关心细节，能用就行，更准确的是 **用的舒服**
+
+该实验设计者的操作：
+
+在 `BPlusTree` 类中设计了一个内部类 `BPlusTreeIterator` implements `Iterator` 接口，重写 `hasNext()` 和 `next()` 方法，关键就在这两个方法中实现了迭代器访问整层叶子节点的 **细节** ，封装之后只需调用该内部类获得迭代器即可满足要求，无需关心内部细节。
+
+最关键的是：
+
+* 调用这种稍微复杂的迭代器就像调用 `List` 的 `iterator()` 一样 **无感**
+* 下一层抽象后供本层调用，在本层只需关心本层的实现内容，本层再进行一波抽象以提供更加强大、完善的功能供上层调用。如此，将一些复杂的功能分为多个阶段，每一个阶段都比之前实现地更多一点、更完善一点、更强大一点，最终实现整个复杂的系统。这一点在B+树的**节点设计**上体现得淋漓尽致！
+* (但是我的腰现在巨酸无比，择日再议...(逃 --- 2022.4.11 22:33
+
+
+
+#### B+树 迭代器的封装
+
+```java
+private class BPlusTreeIterator implements Iterator<RecordId> {
+        // TODO(proj2): Add whatever fields and constructors you want here.
+        LeafNode nextNode; // = root.getLeftmostLeaf();
+        Iterator<RecordId> nextIter; //= leftNode.scanAll();
+
+        public BPlusTreeIterator(LeafNode leftNode, Iterator<RecordId> leftNodeIter) {
+            this.nextNode = leftNode;
+            this.nextIter = leftNodeIter;
+        }
+
+
+        @Override
+        public boolean hasNext() {
+            // TODO(proj2): implement
+            if (nextIter.hasNext() || nextNode.getRightSibling().isPresent()) return true;
+            return false;
+        }
+
+        @Override
+        public RecordId next() {
+            // TODO(proj2): implement
+            if (hasNext()) {
+                if (!nextIter.hasNext()) {
+                    nextNode = nextNode.getRightSibling().get();
+                    nextIter = nextNode.scanAll();
+                }
+                return nextIter.next();
+            }
+            throw new NoSuchElementException();
+        }
+    }
+```
+
+
+
