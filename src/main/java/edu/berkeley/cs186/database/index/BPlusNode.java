@@ -115,7 +115,7 @@ abstract class BPlusNode {
      * following order 2 inner node
      *
      *   +---+---+---+---+
-     *   | 1 | 2 | 3 | 4 | 5
+     *   | 1 | 2 | 3 | 4 | 5 |
      *   +---+---+---+---+
      *
      * into the following two inner nodes

@@ -1,5 +1,6 @@
 package edu.berkeley.cs186.database.index;
 
+import edu.berkeley.cs186.database.cli.parser.ParseException;
 import edu.berkeley.cs186.database.common.Buffer;
 import edu.berkeley.cs186.database.common.Pair;
 import edu.berkeley.cs186.database.concurrency.LockContext;
@@ -82,7 +83,14 @@ class InnerNode extends BPlusNode {
     public LeafNode get(DataBox key) {
         // TODO(proj2): implement
 
-        return null;
+        /*for (int i = 0; i < keys.size(); i++) {
+            if (key.compareTo(keys.get(i)) < 0) {
+                return getChild(i).get(key);
+            }
+        }
+        return getChild(keys.size()).get(key);*/
+        int index = InnerNode.numLessThanEqual(key, keys);
+        return getChild(index).get(key);
     }
 
     // See BPlusNode.getLeftmostLeaf.
@@ -91,7 +99,7 @@ class InnerNode extends BPlusNode {
         assert(children.size() > 0);
         // TODO(proj2): implement
 
-        return null;
+        return getChild(0).getLeftmostLeaf();
     }
 
     // See BPlusNode.put.
@@ -99,6 +107,53 @@ class InnerNode extends BPlusNode {
     public Optional<Pair<DataBox, Long>> put(DataBox key, RecordId rid) {
         // TODO(proj2): implement
 
+        // 错误，应该是调用下一层的节点，而不是直接调用叶子结点
+        /*Optional<Pair<DataBox, Long>> res = this.get(key).put(key, rid);*/
+
+        int index = numLessThanEqual(key, keys);
+        Optional<Pair<DataBox, Long>> res = getChild(index).put(key, rid);
+
+        // last layer overflow
+        if (res.isPresent()) {
+            DataBox split_key = res.get().getFirst();
+            long split_page_num = res.get().getSecond();
+            int d = metadata.getOrder();
+
+            // add entry to the right position of this layer
+//            int index = InnerNode.numLessThan(key, keys);
+            keys.add(index, split_key);
+            children.add(index + 1, split_page_num);
+
+            // this layer overflow
+            if (keys.size() > d * 2) {
+                List<DataBox> newKeys = new ArrayList<>();
+                List<Long> newChildren = new ArrayList<>();
+
+                // copy last d keys to newInnerNode
+                for (int i = 0; i < d; i++) {
+                    newKeys.add(keys.get(d + i + 1));
+                }
+                // copy last d+1 pageNums to newInnerNode
+                for (int i = 0; i < d + 1; i++) {
+                    newChildren.add(children.get(d + i + 1));
+                }
+
+                // remove last d+1 entries from oldInnerNode and get the middle entry
+                for (int i = 0; i < d + 1; i++) {
+                    split_key = keys.remove(keys.size() - 1);
+                    children.remove(children.size() - 1);
+                }
+                InnerNode newInnerNode = new InnerNode(metadata, bufferManager, newKeys, newChildren,
+                        treeContext);
+
+                sync();
+                return Optional.of(new Pair<>(split_key, newInnerNode.getPage().getPageNum()));
+            }
+
+            // this layer not overflow
+
+        }
+        sync();
         return Optional.empty();
     }
 
@@ -108,6 +163,32 @@ class InnerNode extends BPlusNode {
             float fillFactor) {
         // TODO(proj2): implement
 
+        // 前一层返回的结果
+        int d = metadata.getOrder();
+        while (data.hasNext() && keys.size() <= d * 2) {
+            Optional<Pair<DataBox, Long>> res = getChild(children.size() - 1).bulkLoad(data, fillFactor);
+
+            // last layer overflow
+            if (res.isPresent()) {
+                DataBox key = res.get().getFirst();
+                Long pageNum = res.get().getSecond();
+
+                keys.add(key);
+                children.add(pageNum);
+
+                // this layer overflow
+                if (keys.size() > d * 2) {
+                    List<DataBox> newKeys = keys.subList(keys.size() - 1, keys.size());
+                    List<Long> newChildren = children.subList(children.size() - 2, children.size());
+
+                    InnerNode newInnerNode = new InnerNode(metadata, bufferManager, newKeys, newChildren,
+                            treeContext);
+                    sync();
+                    return Optional.of(new Pair<>(key, newInnerNode.getPage().getPageNum()));
+                }
+            }
+        }
+        sync();
         return Optional.empty();
     }
 
@@ -115,7 +196,9 @@ class InnerNode extends BPlusNode {
     @Override
     public void remove(DataBox key) {
         // TODO(proj2): implement
-
+        int index = numLessThanEqual(key, keys);
+        this.getChild(index).remove(key);
+        sync();
         return;
     }
 
