@@ -180,6 +180,12 @@ public abstract class QueryOperator implements Iterable<Record> {
      * iterator over those records. Setting maxPages to 1 will result in an
      * iterator over a single page of records.
      */
+    /**
+     * @param records 关于记录的迭代器
+     * @return 返回一个迭代器，包含该块中的所有记录。相当于限制输入的记录迭代器，使其只能在
+     * 一个最大值内遍历记录
+     * 注：1. 把maxPage设置为1，即得到一个page的iterator
+     * */
     public static BacktrackingIterator<Record> getBlockIterator(Iterator<Record> records, Schema schema, int maxPages) {
         int recordsPerPage = Table.computeNumRecordsPerPage(PageDirectory.EFFECTIVE_PAGE_SIZE, schema);
         int maxRecords = recordsPerPage * maxPages;

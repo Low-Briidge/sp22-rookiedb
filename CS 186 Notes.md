@@ -245,3 +245,84 @@ private class BPlusTreeIterator implements Iterator<RecordId> {
 
 
 
+## Project 3: Joins and Query Optimization
+
+
+
+### Part 1: Join Algorithms
+
+
+
+#### Task 1: Nested Loop Joins (fucked 10 hours)
+
+**一些重要的类 / 方法**
+
+* BacktrackingIterator (接口，实现类为Array....)
+
+可**回溯**的迭代器，通过设置标记后可使位置重置为标记所在处
+
+```java
+/*[1,2,3]:
+ *
+ * BackTrackingIterator<Integer> iter = new BackTrackingIteratorImplementation();
+ * iter.next();     // returns 1
+ * iter.next();     // returns 2
+ * iter.markPrev(); // marks the previously returned value, 2
+ * iter.next();     // returns 3
+ * iter.hasNext();  // returns false
+ * iter.reset();    // reset to the marked value (line 5)
+ * iter.hasNext();  // returns true
+ * iter.next();     // returns 2
+ * iter.markNext(); // mark the value to be returned next, 3
+ * iter.next();     // returns 3
+ * iter.hasNext();  // returns false
+ * iter.reset();    // reset to the marked value (line 11)
+ * iter.hasNext();  // returns true
+ * iter.next();     // returns 3
+ */
+```
+
+
+
+* getBlockIterator (静态方法)
+
+```java
+/**
+     * @param records an iterator of records
+     * @param schema the schema of the records yielded from `records`
+     * @param maxPages the maximum number of pages worth of records to consume
+     * @return This method will consume up to `maxPages` pages of records from
+     * `records` (advancing it in the process) and return a backtracking
+     * iterator over those records. Setting maxPages to 1 will result in an
+     * iterator over a single page of records.
+     */
+    public static BacktrackingIterator<Record> getBlockIterator(Iterator<Record> records, Schema schema, int maxPages) {
+        int recordsPerPage = Table.computeNumRecordsPerPage(PageDirectory.EFFECTIVE_PAGE_SIZE, schema);
+        int maxRecords = recordsPerPage * maxPages;
+        List<Record> blockRecords = new ArrayList<>();
+        for (int i = 0; i < maxRecords && records.hasNext(); i++) {
+            blockRecords.add(records.next());
+        }
+        return new ArrayBacktrackingIterator<>(blockRecords);
+    }
+```
+
+
+
+
+
+**错误点 (Bug)**
+
+1. leftPage reset() but not next() **精准命中...**
+
+   > The mistake was that the leftRecord wasn't reset back to the first record in the left page. Many students will remember to call `leftIterator.reset()`, but forget to do `leftRecord = leftIterator.next()` afterwards, causing this issue.
+
+   ![image-20220423105209982](C:\Users\low19\AppData\Roaming\Typora\typora-user-images\image-20220423105209982.png)
+
+
+
+#### Task 2: Hash Joins
+
+* Simple Hash Join
+
+  

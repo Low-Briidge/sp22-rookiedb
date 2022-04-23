@@ -65,6 +65,9 @@ public class SHJOperator extends JoinOperator {
      * Partition stage. For every record in the left record iterator, hashes the
      * value we are joining on and adds that record to the correct partition.
      */
+    /**
+     * 把左表的每一条记录取出其中的某个值，映射到对应的分区(partition)
+     * */
     private void partition(Partition[] partitions, Iterable<Record> leftRecords) {
         for (Record record: leftRecords) {
             // Partition left records on the chosen column
@@ -86,6 +89,15 @@ public class SHJOperator extends JoinOperator {
      * @param partition a partition
      * @param rightRecords An iterable of records from the right relation
      */
+    /**
+     * 为每一个分区(partition)建立一个哈希表，探测右表是否存在等值记录(record)
+     * 具体实现：对于右表的每一条记录，如果在该分区内存在相同的值，则该值对应的HashMap
+     *          的value(是一个list，即左表一组相同的记录)都能够与之(this rightRecord)匹配
+     * <p></p>
+     * 注意：上面的partition()方法只是一个粗略的划分，每个分区不一定所有的记录都相等
+     *      因此在buildAndProbe()中对每个分区又进行了一次hash(用HashMap)
+     *      从参与比较的那个属性 --hash--> list of records
+     * */
     private void buildAndProbe(Partition partition, Iterable<Record> rightRecords) {
         if (partition.getNumPages() > this.numBuffers - 2) {
             throw new IllegalArgumentException(
@@ -125,6 +137,10 @@ public class SHJOperator extends JoinOperator {
      * create an array of partitions. Then, build and probe with each hash
      * partitions records.
      */
+    /**
+     * 执行Simple Hash Join
+     * this.joinedRecords为最终的运算结果
+     * */
     private void run(Iterable<Record> leftRecords, Iterable<Record> rightRecords, int pass) {
         assert pass >= 1;
         if (pass > 5) throw new IllegalStateException("Reached the max number of passes");
