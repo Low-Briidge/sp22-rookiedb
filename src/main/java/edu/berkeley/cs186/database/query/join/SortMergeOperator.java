@@ -140,6 +140,46 @@ public class SortMergeOperator extends JoinOperator {
          */
         private Record fetchNextRecord() {
             // TODO(proj3_part1): implement
+            if (this.leftRecord != null) {
+                while (true) {
+                    if (!this.marked && rightRecord != null) {
+                        while (leftRecord != null && compare(leftRecord, rightRecord) < 0) {
+                            if (this.leftIterator.hasNext()) {
+                                this.leftRecord = this.leftIterator.next();
+                            }
+                            else {
+                                this.leftRecord = null;
+                                return null;
+                            }
+                        }
+                        while (compare(leftRecord, rightRecord) > 0) {
+                            this.rightRecord = this.rightIterator.hasNext() ? this.rightIterator.next() : null;
+                            if (this.rightRecord == null) {
+                                return null;
+                            }
+                        }
+                        this.marked = true;
+                        this.rightIterator.markPrev();
+                    }
+                    // 加了个判断(rightRecord != null)，怎么莫名其妙的对了？？？
+                    if (rightRecord != null && compare(leftRecord, rightRecord) == 0) {
+                        Record output = leftRecord.concat(rightRecord);
+                        this.rightRecord = this.rightIterator.hasNext() ? this.rightIterator.next() : null;
+                        /*if (rightRecord == null) {
+                            this.rightIterator.reset();
+                            this.rightRecord = this.rightIterator.next();
+                            this.marked = false;
+                        }*/
+                        return output;
+                    } else {
+                        this.rightIterator.reset();
+                        this.marked = false;
+                        this.rightRecord = this.rightIterator.hasNext() ? this.rightIterator.next() : null;
+                        this.leftRecord = this.leftIterator.hasNext() ? this.leftIterator.next() : null;
+                        if (leftRecord == null) return null;
+                    }
+                }
+            }
             return null;
         }
 

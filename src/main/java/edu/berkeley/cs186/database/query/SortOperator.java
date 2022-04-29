@@ -87,7 +87,12 @@ public class SortOperator extends QueryOperator {
      */
     public Run sortRun(Iterator<Record> records) {
         // TODO(proj3_part1): implement
-        return null;
+        List<Record> list = new ArrayList<>();
+        while (records.hasNext()) {
+            list.add(records.next());
+        }
+        list.sort(this.comparator);
+        return this.makeRun(list);
     }
 
     /**
@@ -108,7 +113,24 @@ public class SortOperator extends QueryOperator {
     public Run mergeSortedRuns(List<Run> runs) {
         assert (runs.size() <= this.numBuffers - 1);
         // TODO(proj3_part1): implement
-        return null;
+        PriorityQueue<Pair<Record, Integer>> heap = new PriorityQueue<>(new RecordPairComparator());
+        List<Iterator<Record>> iterators = new ArrayList<>();
+        Run output = this.makeRun();
+        for (int i = 0; i < runs.size(); i++) {
+            iterators.add(runs.get(i).iterator());
+            if (iterators.get(i).hasNext()) {
+                heap.add(new Pair<>(iterators.get(i).next(), i));
+            }
+        }
+        while (!heap.isEmpty()) {
+            Pair<Record, Integer> remove = heap.remove();
+            output.add(remove.getFirst());
+            if (iterators.get(remove.getSecond()).hasNext()) {
+                heap.add(new Pair<>(iterators.get(remove.getSecond()).next(), remove.getSecond()));
+            }
+        }
+
+        return output;
     }
 
     /**
@@ -133,7 +155,12 @@ public class SortOperator extends QueryOperator {
      */
     public List<Run> mergePass(List<Run> runs) {
         // TODO(proj3_part1): implement
-        return Collections.emptyList();
+        int size = this.numBuffers - 1;
+        List<Run> output = new ArrayList<>();
+        for (int i = 0; i < runs.size(); i += size) {
+            output.add(this.mergeSortedRuns(runs.subList(i, i + size)));
+        }
+        return output;
     }
 
     /**
@@ -149,7 +176,16 @@ public class SortOperator extends QueryOperator {
         Iterator<Record> sourceIterator = getSource().iterator();
 
         // TODO(proj3_part1): implement
-        return makeRun(); // TODO(proj3_part1): replace this!
+        List<Run> runs = new ArrayList<>();
+        while (sourceIterator.hasNext()) {
+            Iterator<Record> blockIterator = QueryOperator.getBlockIterator(sourceIterator, this.getSchema(),
+                    numBuffers);
+            runs.add(this.sortRun(blockIterator));
+        }
+        while (runs.size() > 1) {
+            runs = mergePass(runs);
+        }
+        return runs.get(0); // TODO(proj3_part1): replace this!
     }
 
     /**
