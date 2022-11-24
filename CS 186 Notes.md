@@ -475,3 +475,37 @@ Run 应该是外排序归并过程的一个(输入或输出)单位(有图有真�
 
 * 先确定大致的解决框架
 * 然后填充细节(比如各种边界判断等...)
+
+## Project 4: Concurrency
+
+### Part 1: Queuing
+
+#### Task 2: LockManager
+
+```java
+public void acquireAndRelease(TransactionContext transaction,
+                              ResourceName name,
+                              LockType lockType, 
+                              List<ResourceName> releaseNames)
+```
+
+* 事务获取锁后释放已持有资源上的锁，原子地实现
+* 获取的锁类型与共享资源上其他事务的锁冲突，阻塞，并且将该事务至于该资源的队列头
+
+
+
+```java
+public void acquire(TransactionContext transaction, 
+                    ResourceName name,
+                    LockType lockType)
+```
+
+* 尝试在该资源上获取锁，不兼容的话阻塞并加入队列尾部
+
+
+
+```java
+public void release(TransactionContext transaction, ResourceName name)
+```
+
+* 释放锁

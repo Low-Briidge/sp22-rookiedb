@@ -22,7 +22,29 @@ public enum LockType {
             throw new NullPointerException("null lock type");
         }
         // TODO(proj4_part1): implement
-
+        if (a == NL || b == NL) return true;
+        else if (a == S) {
+            if (b == S) return true;
+            if (b == IS) return true;
+            if (b == NL) return true;
+            return false;
+        }
+        else if (a == X) {
+            if (b == NL) return true;
+            return false;
+        }
+        else if (a == IS) {
+            if (b == X) return false;
+            return true;
+        }
+        else if (a == IX) {
+            if (b == NL || b == IS || b == IX) return true;
+            return false;
+        }
+        else if (a == SIX) {
+            if (b == NL || b == IS) return true;
+            return false;
+        }
         return false;
     }
 
@@ -54,6 +76,26 @@ public enum LockType {
             throw new NullPointerException("null lock type");
         }
         // TODO(proj4_part1): implement
+        if (childLockType == NL) return true;
+        if (parentLockType == IX) return true;
+        if (parentLockType == IS) {
+            if (childLockType == IS) return true;
+            if (childLockType == S) return true;
+            if (childLockType == NL) return true;
+        }
+        else if (parentLockType == IX) {
+            if (childLockType == IX) return true;
+            if (childLockType == X) return true;
+            if (childLockType == NL) return true;
+        }
+        else if (parentLockType == SIX) {
+            if (childLockType == SIX) return true;
+            if (childLockType == S) return true;
+            if (childLockType == IS) return true;
+            if (childLockType == IX) return true;
+            if (childLockType == X) return true;
+            if (childLockType == NL) return true;
+        }
 
         return false;
     }
@@ -69,7 +111,18 @@ public enum LockType {
             throw new NullPointerException("null lock type");
         }
         // TODO(proj4_part1): implement
-
+        if (substitute == required) return true;
+        else if (substitute == X) return true;
+        else if (substitute == SIX) {
+            if (required == X) return false;
+            return true;
+        }
+        else if (substitute == S || substitute == IX) {
+            if (required == IS || required == NL) return true;
+        }
+        else if (substitute == IS) {
+            if (required == NL) return true;
+        }
         return false;
     }
 
