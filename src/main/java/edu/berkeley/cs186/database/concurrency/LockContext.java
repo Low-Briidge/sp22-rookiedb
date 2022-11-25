@@ -96,6 +96,8 @@ public class LockContext {
     public void acquire(TransactionContext transaction, LockType lockType)
             throws InvalidLockException, DuplicateLockRequestException {
         // TODO(proj4_part2): implement
+        if (readonly)
+            throw new UnsupportedOperationException("LockContext is readonly");
         LockType parentLockType;
         if (parentContext() != null) {
             parentLockType = parentContext().getExplicitLockType(transaction);
@@ -125,6 +127,8 @@ public class LockContext {
     public void release(TransactionContext transaction)
             throws NoLockHeldException, InvalidLockException {
         // TODO(proj4_part2): implement
+        if (readonly)
+            throw new UnsupportedOperationException("LockContext is readonly");
         if (lockman.getLockType(transaction, getResourceName()) == LockType.NL) {
             throw new NoLockHeldException("NoLockHeld");
         }
@@ -171,6 +175,8 @@ public class LockContext {
     public void promote(TransactionContext transaction, LockType newLockType)
             throws DuplicateLockRequestException, NoLockHeldException, InvalidLockException {
         // TODO(proj4_part2): implement
+        if (readonly)
+            throw new UnsupportedOperationException("LockContext is readonly");
         LockType oldLockType = lockman.getLockType(transaction, getResourceName());
         if (newLockType.equals(oldLockType))
             throw new DuplicateLockRequestException("`transaction` already has a `newLockType` lock on this resource");
@@ -216,8 +222,34 @@ public class LockContext {
      */
     public void escalate(TransactionContext transaction) throws NoLockHeldException {
         // TODO(proj4_part2): implement
+        if (readonly)
+            throw new UnsupportedOperationException("LockContext is readonly");
+        LockType lockType = lockman.getLockType(transaction, getResourceName());
+        if (lockType == LockType.NL)
+            throw new NoLockHeldException("`transaction` has no lock on this resource");
+        List<Lock> locks = lockman.getLocks(transaction);
+        List<ResourceName> descendants = getDescendants(transaction);
 
+        for (int i = 0; i < locks.size(); i++) {
+            Lock lock = locks.get(i);
+            if (lock.name.isDescendantOf(getResourceName())) {
+                numChildLocks.put(transaction.getTransNum(), getNumChildren(transaction) - 1);
+            }
+        }
+        if (lockType == LockType.SIX || lockType == LockType.IX)
+            lockman.acquireAndRelease(transaction, getResourceName(), LockType.X, descendants);
+        else if (lockType == LockType.IS)
+            lockman.acquireAndRelease(transaction, getResourceName(), LockType.S, descendants);
         return;
+    }
+    private List<ResourceName> getDescendants(TransactionContext transaction) {
+        List<ResourceName> names = new ArrayList<>();
+        List<Lock> locks = lockman.getLocks(transaction);
+        for (Lock lock : locks) {
+            if (lock.name.isDescendantOf(name))
+                names.add(lock.name);
+        }
+        return names;
     }
 
     /**
@@ -275,18 +307,15 @@ public class LockContext {
      */
     private List<ResourceName> sisDescendants(TransactionContext transaction) {
         // TODO(proj4_part2): implement
-        List<ResourceName> res = new ArrayList<>();
+        ArrayList<ResourceName> names = new ArrayList<>();
+        List<Lock> locks = lockman.getLocks(transaction);
+        for (Lock lock : locks) {
+            if (lock.name.isDescendantOf(getResourceName())
+                && (lock.lockType == LockType.S || lock.lockType == LockType.IS)) {
 
-        LockType lockType = getEffectiveLockType(transaction);
-        if (lockType == LockType.S || lockType == LockType.IS)
-            res.add(getResourceName());
-
-        if (getNumChildren(transaction) > 0) {
-            for (String name : children.keySet()) {
-                res.addAll(children.get(name).sisDescendants(transaction));
             }
         }
-        return res;
+        return names;
     }
 
     /**
