@@ -96,7 +96,18 @@ public class LockContext {
     public void acquire(TransactionContext transaction, LockType lockType)
             throws InvalidLockException, DuplicateLockRequestException {
         // TODO(proj4_part2): implement
-
+        LockType parentLockType;
+        if (parentContext() != null) {
+            parentLockType = parentContext().getExplicitLockType(transaction);
+            if (!LockType.canBeParentLock(parentLockType, lockType))
+                throw new InvalidLockException("incompatible with parent's lock");
+        }
+        lockman.acquire(transaction, getResourceName(), lockType);
+        LockContext p = parentContext();
+        while (p != null) {
+            p.numChildLocks.put(transaction.getTransNum(), p.getNumChildren(transaction) + 1);
+            p = p.parentContext();
+        }
         return;
     }
 
@@ -114,7 +125,27 @@ public class LockContext {
     public void release(TransactionContext transaction)
             throws NoLockHeldException, InvalidLockException {
         // TODO(proj4_part2): implement
-
+        if (lockman.getLockType(transaction, getResourceName()) == LockType.NL) {
+            throw new NoLockHeldException("NoLockHeld");
+        }
+        // 当前资源想释放的锁只能是当前事务持有的最后一个锁
+//        List<Lock> locks = lockman.getLocks(transaction);
+//        List<Lock> locksOnResource = lockman.getLocks(getResourceName());
+//        for (Lock lock : locksOnResource) {
+//            if (lock.transactionNum == transaction.getTransNum()) {
+//                if (locks.indexOf(lock) != locks.size() - 1)
+//                    throw new InvalidLockException("Children have locks");
+//                break;
+//            }
+//        }
+        if (getNumChildren(transaction) > 0)
+            throw new InvalidLockException("Children have locks");
+        lockman.release(transaction, getResourceName());
+        LockContext p = parentContext();
+        while (p != null) {
+            p.numChildLocks.put(transaction.getTransNum(), p.getNumChildren(transaction) - 1);
+            p = p.parentContext();
+        }
         return;
     }
 
@@ -140,7 +171,13 @@ public class LockContext {
     public void promote(TransactionContext transaction, LockType newLockType)
             throws DuplicateLockRequestException, NoLockHeldException, InvalidLockException {
         // TODO(proj4_part2): implement
-
+        LockType oldLockType = lockman.getLockType(transaction, getResourceName());
+        if (newLockType.equals(oldLockType))
+            throw new DuplicateLockRequestException("`transaction` already has a `newLockType` lock on this resource");
+        if (oldLockType == LockType.NL)
+            throw new NoLockHeldException("`transaction` has no lock on this resource");
+        lockman.release(transaction, getResourceName());
+        lockman.acquireAndRelease(transaction, getResourceName(), newLockType, sisDescendants(transaction));
         return;
     }
 
@@ -190,7 +227,7 @@ public class LockContext {
     public LockType getExplicitLockType(TransactionContext transaction) {
         if (transaction == null) return LockType.NL;
         // TODO(proj4_part2): implement
-        return LockType.NL;
+        return lockman.getLockType(transaction, getResourceName());
     }
 
     /**
@@ -202,6 +239,14 @@ public class LockContext {
     public LockType getEffectiveLockType(TransactionContext transaction) {
         if (transaction == null) return LockType.NL;
         // TODO(proj4_part2): implement
+        LockType lockType;
+        if ((lockType = getExplicitLockType(transaction)) != LockType.NL) {
+            if (lockType.isIntent())
+                return LockType.NL;
+            return lockType;
+        }
+        if (parentContext() != null)
+            return parentContext().getEffectiveLockType(transaction);
         return LockType.NL;
     }
 
@@ -213,6 +258,11 @@ public class LockContext {
      */
     private boolean hasSIXAncestor(TransactionContext transaction) {
         // TODO(proj4_part2): implement
+        LockContext p;
+        while ((p = parentContext()) != null) {
+            if (p.getExplicitLockType(transaction) == LockType.SIX)
+                return true;
+        }
         return false;
     }
 
@@ -225,7 +275,18 @@ public class LockContext {
      */
     private List<ResourceName> sisDescendants(TransactionContext transaction) {
         // TODO(proj4_part2): implement
-        return new ArrayList<>();
+        List<ResourceName> res = new ArrayList<>();
+
+        LockType lockType = getEffectiveLockType(transaction);
+        if (lockType == LockType.S || lockType == LockType.IS)
+            res.add(getResourceName());
+
+        if (getNumChildren(transaction) > 0) {
+            for (String name : children.keySet()) {
+                res.addAll(children.get(name).sisDescendants(transaction));
+            }
+        }
+        return res;
     }
 
     /**
