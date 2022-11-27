@@ -74,10 +74,13 @@ public class LockManager {
         public void grantOrUpdateLock(Lock lock) {
             // TODO(proj4_part1): implement
             if (getTransactionLockType(lock.transactionNum) != LockType.NL) {
-                for (Lock lock1 : locks) {
+                int index;
+                for (index = 0; index < locks.size(); index++) {
+                    Lock lock1 = locks.get(index);
                     if (lock.transactionNum.equals(lock1.transactionNum)) {
+                        locks.add(index, lock);
                         locks.remove(lock1);
-                        break;
+                        return;
                     }
                 }
             }
@@ -319,12 +322,12 @@ public class LockManager {
         LockType oldLockType = getLockType(transaction, name);
         Lock oldLock = new Lock(name, oldLockType, transaction.getTransNum());
         Lock lock = new Lock(name, newLockType, transaction.getTransNum());
+        ResourceEntry resourceEntry = getResourceEntry(name);
         synchronized (this) {
             if (oldLockType.equals(newLockType))
                 throw new DuplicateLockRequestException("DuplicateLockRequest");
             if (!LockType.substitutable(newLockType, oldLockType))
                 throw new InvalidLockException("Can not substitute");
-            ResourceEntry resourceEntry = getResourceEntry(name);
             if (resourceEntry.getTransactionLockType(transaction.getTransNum()) == LockType.NL)
                 throw new NoLockHeldException("NoLockHeld");
             if (!resourceEntry.checkCompatible(newLockType, transaction.getTransNum())) {
@@ -333,12 +336,7 @@ public class LockManager {
                 resourceEntry.addToQueue(lockRequest, true);
                 transaction.prepareBlock();
             } else {
-                int index = resourceEntry.locks.indexOf(oldLock);
-                resourceEntry.locks.set(index, lock);
-                List<Lock> locks = getLocks(transaction);
-                int i = locks.indexOf(oldLock);
-                locks.set(i, lock);
-                return;
+                resourceEntry.grantOrUpdateLock(lock);
             }
         }
         if (shouldBlock) {

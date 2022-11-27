@@ -182,8 +182,25 @@ public class LockContext {
             throw new DuplicateLockRequestException("`transaction` already has a `newLockType` lock on this resource");
         if (oldLockType == LockType.NL)
             throw new NoLockHeldException("`transaction` has no lock on this resource");
-        lockman.release(transaction, getResourceName());
-        lockman.acquireAndRelease(transaction, getResourceName(), newLockType, sisDescendants(transaction));
+        if (newLockType == LockType.SIX) {
+            if (hasSIXAncestor(transaction)) {
+                throw new InvalidLockException("ancestor already has SIX lock, redundant lock request");
+            }
+            if (lockman.getLocks(transaction).size() == 0) {
+                throw new NoLockHeldException("transaction has no lock");
+            }
+            if (!LockType.substitutable(newLockType, lockman.getLockType(transaction, name))){
+                throw new InvalidLockException("new LockType can not substitute the old one");
+            }
+            List<ResourceName> sisDesc = sisDescendants(transaction);
+            // update numChildLocks
+            numChildLocks.put(transaction.getTransNum(), getNumChildren(transaction) - 1);
+            // release the locks simultaneously (including lock in this level)
+            sisDesc.add(name);
+            lockman.acquireAndRelease(transaction, name, newLockType, sisDesc);
+        } else {
+            lockman.promote(transaction, name, newLockType);
+        }
         return;
     }
 
@@ -236,6 +253,7 @@ public class LockContext {
                 numChildLocks.put(transaction.getTransNum(), getNumChildren(transaction) - 1);
             }
         }
+        descendants.add(getResourceName());
         if (lockType == LockType.SIX || lockType == LockType.IX)
             lockman.acquireAndRelease(transaction, getResourceName(), LockType.X, descendants);
         else if (lockType == LockType.IS)
@@ -290,10 +308,11 @@ public class LockContext {
      */
     private boolean hasSIXAncestor(TransactionContext transaction) {
         // TODO(proj4_part2): implement
-        LockContext p;
-        while ((p = parentContext()) != null) {
+        LockContext p = parentContext();
+        while (p != null) {
             if (p.getExplicitLockType(transaction) == LockType.SIX)
                 return true;
+            p = p.parentContext();
         }
         return false;
     }
@@ -312,7 +331,7 @@ public class LockContext {
         for (Lock lock : locks) {
             if (lock.name.isDescendantOf(getResourceName())
                 && (lock.lockType == LockType.S || lock.lockType == LockType.IS)) {
-
+                names.add(lock.name);
             }
         }
         return names;
