@@ -509,3 +509,77 @@ public void release(TransactionContext transaction, ResourceName name)
 ```
 
 * 释放锁
+
+
+
+## Rookie DB 架构分析
+
+###  I/O: 如何读入一个page
+
+```java
+// PageDirectory.java
+public Page getPage(long pageNum) {
+    return new DataPage(pageDirectoryId, 
+                        this.bufferManager.fetchPage(lockContext, pageNum));
+}
+```
+
+* 尝试去缓冲区查看是否缓存过该页面，如果缓存过则直接取出该帧
+* 否则读入一个新的page
+
+```java
+// BufferManager.java
+public Page fetchPage(LockContext parentContext, long pageNum) {
+    return this.frameToPage(parentContext, pageNum, this.fetchPageFrame(pageNum));
+}
+
+Frame fetchPageFrame(long pageNum) {
+    //...
+    // read new page into frame
+    try {
+        newFrame.pageNum = pageNum;
+        newFrame.pin();
+        // 从磁盘管理器中读取新页面
+        BufferManager.this.diskSpaceManager.readPage(pageNum, newFrame.contents);
+        this.incrementIOs();
+        return newFrame;
+    } catch (PageException e) {
+        newFrame.unpin();
+        throw e;
+    } finally {
+        newFrame.frameLock.unlock();
+    }
+}
+```
+
+
+
+```java
+// DiskSpaceManagerImpl.java
+public void readPage(long page, byte[] buf) {
+    try {
+        // 通过页面的分区管理读取该页面
+        pi.readPage(pageNum, buf);
+    } catch (IOException e) {
+        throw new PageException("could not read partition " + partNum + ": " + e.getMessage());
+    } finally {
+        pi.partitionLock.unlock();
+    }
+}
+```
+
+
+
+```java
+// PartitionHandle.java
+void readPage(int pageNum, byte[] buf) throws IOException {
+    if (this.isNotAllocatedPage(pageNum)) {
+        throw new PageException("page " + pageNum + " is not allocated");
+    }
+    ByteBuffer b = ByteBuffer.wrap(buf);
+    // 通过对RandomAccessFile的channel读到buffer
+    // 根据offset得到页面在文件中的具体位置
+    this.fileChannel.read(b, PartitionHandle.dataPageOffset(pageNum));
+}
+```
+
